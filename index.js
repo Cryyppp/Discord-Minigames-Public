@@ -46,26 +46,21 @@ for (const file of eventFiles) {
   }
 }
 
-// Array con opzioni di status e tipo attività
+// sostituisci la definizione statusOptions e updateStatus con questa versione async
 const statusOptions = [
-  {
-    text: () => `${client.guilds.cache.size} salegiochi`,
-    type: ActivityType.Watching,
-  },
-  {
-    text: () => {
-      // Somma tutti i membri di tutte le guild
-      const totalMembers = client.guilds.cache.reduce(
-        (acc, guild) => acc + guild.memberCount,
-        0
-      );
+  { text: () => `${client.guilds.cache.size} salegiochi`, type: ActivityType.Watching },
+  { text: () => {
+      const totalMembers = client.guilds.cache.reduce((acc, g) => acc + g.memberCount, 0);
       return `${totalMembers} gamers`;
-    },
-    type: ActivityType.Watching,
+    }, type: ActivityType.Watching
   },
+  { text: async () => {
+      // conta tutti gli utenti registrati nella tabella "coins"
+      const registeredCount = await Coins.count();
+      return `${registeredCount} official gamers`;
+    }, type: ActivityType.Playing
+  }
 ];
-
-
 
 const sequelize = new Sequelize("database", "username", "password", {
   host: "localhost",
@@ -95,19 +90,15 @@ const Coins = sequelize.define("coins", {
 });
 
 
-client.on("ready", () => {
-  // Funzione per aggiornare lo status
-  const updateStatus = () => {
-    const randomStatus =
-      statusOptions[Math.floor(Math.random() * statusOptions.length)];
-    const statusText =
-      typeof randomStatus.text === "function"
-        ? randomStatus.text()
-        : randomStatus.text;
-    client.user.setActivity(statusText, { type: randomStatus.type });
-  };
-  updateStatus();
+const updateStatus = async () => {
+  const randomStatus = statusOptions[Math.floor(Math.random() * statusOptions.length)];
+  let statusText = randomStatus.text();
+  if (statusText instanceof Promise) statusText = await statusText;
+  client.user.setActivity(statusText, { type: randomStatus.type });
+};
 
+client.on("ready", () => {
+  updateStatus();
   setInterval(updateStatus, 10000);
   deployCommands();
   Coins.sync({ alter: true });
