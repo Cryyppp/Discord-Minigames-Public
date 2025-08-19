@@ -19,7 +19,7 @@ Bot pubblico di minigiochi per Discord buildato con discord.js. Fornisce un sist
 1. Clona il repository
 2. Entra nella cartella del progetto
    ```bash
-
+    cd MyBot
    ```
 3. Installa dipendenze
    ```bash
