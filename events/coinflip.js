@@ -72,6 +72,9 @@ module.exports = {
     try {
       await sequelize.sync(); // assicura il modello
       const record = await Coinflip.findOne({ where: { id: coinflipId } });
+      if(interaction.user.id === record.player1) {
+        return interaction.reply({ content: "Non puoi accettare un tuo stesso coinflip", ephemeral: true });
+      }
       if (!record) {
         return interaction.reply({
           content: `Nessun coinflip con ID ${coinflipId} trovato.`,
@@ -85,46 +88,67 @@ module.exports = {
         });
       }
 
-
       const user1 = await Coins.findOne({ where: { userId: record.player1 } });
-      const user2 = await Coins.findOne({ where: { userId: interaction.user.id } });
-
-      if (user2.amount < record.bet) {
-        return interaction.reply({
-          content: "Non hai abbastanza coin per accettare questa scommessa.",
-          ephemeral: true,
-        });
+      try {
+        const user2 = await Coins.findOne({ where: { userId: interaction.user.id } });
+        if (!user2) {
+          return interaction.reply({
+            content: "⚠ Devi registrarti prima di usare questo comando.",
+            ephemeral: true,
+          });
+        }
+      } catch (error) {
+        console.error("Errore nel recupero dell'utente 2:", error);
+        return interaction.reply({ content: "Errore interno.", ephemeral: true });
       }
-
       await record.update({ player2: interaction.user.id, status: "accepted" });
 
-      const player = record.player1;
-      const opponentData = record.player2;
-
-      const winner = Math.random() < 0.5 ? player : opponentData;
-      const loser = winner.id === player.id ? opponentData : player;
+      const player1 = record.player1;
+      const player2 = record.player2;
       const bet = record.bet;
 
-      // Aggiorna i coin
-      await Coins.update(
-        { amount: Sequelize.literal(`amount + ${bet}`) },
-        { where: { userId: winner } }
-      );
-      await Coins.update(
-        { amount: Sequelize.literal(`amount - ${bet}`) },
-        { where: { userId: loser } }
-      );
+      // verifica che entrambi abbiano abbastanza coin
+      if (user1.amount < bet) {
+        return interaction.reply({ content: "Il giocatore che ha creato la scommessa non ha abbastanza coin.", ephemeral: true });
+      }
+      if (user2.amount < bet) {
+        return interaction.reply({ content: "Non hai abbastanza coin per accettare questa scommessa.", ephemeral: true });
+      }
 
-      // Messaggio embed di risultato
+      // determina vincitore e perdente usando gli id
+      const winnerId = Math.random() < 0.5 ? player1 : player2;
+      const loserId = winnerId === player1 ? player2 : player1;
+
+      // applica trasferimento: il vincitore guadagna la puntata, il perdente la perde
+      const winnerRecord = winnerId === user1.userId ? user1 : user2;
+      const loserRecord = loserId === user1.userId ? user1 : user2;
+
+      winnerRecord.amount = (winnerRecord.amount || 0) + bet;
+      loserRecord.amount = (loserRecord.amount || 0) - bet;
+
+      await winnerRecord.save();
+      await loserRecord.save();
+
+      await record.update({ winner: winnerId, status: "completed" });
+
+      // tenta di recuperare il tag dell'utente per una risposta più leggibile
+      const winnerUser = await interaction.client.users.fetch(winnerId).catch(() => null);
+      const winnerTag = winnerUser ? winnerUser.tag : winnerId;
+
       const embed = new EmbedBuilder()
-        .setTitle("🪙 Coinflip!")
-        .setDescription(
-          `La sfida tra **${player.id}** e **${opponentData.id}** si è conclusa!\n\n🏆 Vincitore: **${winner.username}**\n💰 Ha vinto **${bet} coin**`
+        .setTitle("🪙 Coinflip Completato")
+        .setDescription(`Il coinflip tra <@${user1.id}> e <@${user2.id}> è terminato!`)
+        .addFields(
+          { name: "Giocatore 1", value: `<@${user1.id}>`, inline: true },
+          { name: "Giocatore 2", value: `<@${user2.id}>`, inline: true },
+          { name: "Puntata", value: `${bet} coin`, inline: true },
+          { name: "Vincitore", value: winnerTag, inline: true }
         )
-        .setColor("Gold")
-        .setTimestamp();
+        .setColor("#00FF00");
 
       return interaction.reply({ embeds: [embed] });
+
+      //return interaction.reply({ embeds: [embed] });
     } catch (err) {
       console.error("Errore lettura coinflip:", err);
       return interaction.reply({ content: "Errore interno.", ephemeral: true });

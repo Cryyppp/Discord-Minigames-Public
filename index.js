@@ -5,6 +5,7 @@ const { token } = require("./config.json");
 const { ActivityType } = require("discord.js");
 const deployCommands = require("./deploycommands.js");
 const {Sequelize, DataTypes} = require("sequelize");
+const { type } = require("node:os");
 
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -59,6 +60,10 @@ const statusOptions = [
       const registeredCount = await Coins.count();
       return `${registeredCount} official gamers`;
     }, type: ActivityType.Playing
+  },
+  {
+    text: () => `/register per iniziare`,
+    type: ActivityType.Watching
   }
 ];
 

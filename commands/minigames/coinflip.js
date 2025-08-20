@@ -74,6 +74,13 @@ module.exports = {
         });
       }
 
+      if(!interaction.guild) {
+        return interaction.reply({
+          content: "⚠ Questo comando può essere usato solo in un server.",
+          ephemeral: true,
+        });
+      }
+
       try {
         const existingCoinflip = await Coinflip.findOne({
           where: {
